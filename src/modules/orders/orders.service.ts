@@ -122,7 +122,25 @@ export class OrdersService {
       }
     }
 
-    return this.loadFullOrder(saved.id);
+    const full = await this.loadFullOrder(saved.id);
+    this.alertAdminNewOrder(full);
+    return full;
+  }
+
+  /**
+   * Fire-and-forget push alert to the owner on every new order, via the
+   * URL in ADMIN_ALERT_URL (e.g. an ntfy.sh topic). Never throws and
+   * never blocks or fails the order flow.
+   */
+  private alertAdminNewOrder(order: Order): void {
+    const url = process.env.ADMIN_ALERT_URL;
+    if (!url) return;
+    const rupees = (order.totalPaise / 100).toFixed(0);
+    fetch(url, {
+      method: 'POST',
+      body: `Naya order ${order.orderNo} - Rs.${rupees} - Dashboard me dekhein`,
+      headers: { Title: 'DAKSH - Naya Order', Tags: 'bell,package' },
+    }).catch(() => undefined);
   }
 
   async loadFullOrder(id: string): Promise<Order> {
