@@ -4,6 +4,7 @@ import { DataSource } from 'typeorm';
 import { ALL_ENTITIES } from '../entities';
 import { InitialSchema1763299200000 } from './migrations/1763299200000-InitialSchema';
 import { MakeUserMobileNullable1795087523965 } from './migrations/1795087523965-MakeUserMobileNullable';
+import { AddPaymentScreenshotKey1795087523966 } from './migrations/1795087523966-AddPaymentScreenshotKey';
 
 loadEnv();
 
@@ -17,7 +18,11 @@ export const AppDataSource = new DataSource({
   type: 'postgres',
   url,
   entities: ALL_ENTITIES,
-  migrations: [InitialSchema1763299200000, MakeUserMobileNullable1795087523965],
+  migrations: [
+    InitialSchema1763299200000,
+    MakeUserMobileNullable1795087523965,
+    AddPaymentScreenshotKey1795087523966,
+  ],
   synchronize: false,
   logging: false,
 });

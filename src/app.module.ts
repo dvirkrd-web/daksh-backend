@@ -8,6 +8,7 @@ import configuration, { AppConfiguration } from './config/configuration';
 import { ALL_ENTITIES } from './entities';
 import { InitialSchema1763299200000 } from './database/migrations/1763299200000-InitialSchema';
 import { MakeUserMobileNullable1795087523965 } from './database/migrations/1795087523965-MakeUserMobileNullable';
+import { AddPaymentScreenshotKey1795087523966 } from './database/migrations/1795087523966-AddPaymentScreenshotKey';
 import { AdminModule } from './modules/admin/admin.module';
 import { AddressesModule } from './modules/addresses/addresses.module';
 import { AuditModule } from './modules/audit/audit.module';
@@ -44,6 +45,7 @@ import { UsersModule } from './modules/users/users.module';
         migrations: [
           InitialSchema1763299200000,
           MakeUserMobileNullable1795087523965,
+          AddPaymentScreenshotKey1795087523966,
         ],
         migrationsRun: false,
         synchronize: false,

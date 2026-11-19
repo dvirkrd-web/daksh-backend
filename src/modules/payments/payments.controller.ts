@@ -34,9 +34,10 @@ export class PaymentsController {
 
   /**
    * UPI (manual) payment: the customer already paid the business UPI ID
-   * in their UPI app and submits the 12-digit UTR. Creates the order in
+   * in their UPI app and submits a proof — the 12-digit UTR and/or a
+   * payment screenshot (uploaded via /uploads). Creates the order in
    * pending_payment — it becomes a real order only after an admin
-   * verifies the UTR in the dashboard.
+   * verifies the proof in the dashboard.
    */
   @Post('upi-order')
   createUpiOrder(

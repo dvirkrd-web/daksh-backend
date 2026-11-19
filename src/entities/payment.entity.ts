@@ -35,6 +35,20 @@ export class Payment {
   })
   gatewayPaymentId: string | null;
 
+  /**
+   * UPI (manual) payments only: private-storage key of the payment
+   * screenshot the customer uploaded as proof instead of (or along
+   * with) a UTR. The UTR itself lives in gatewayPaymentId. Admins open
+   * the screenshot through a time-limited signed URL — never public.
+   */
+  @Column({
+    name: 'screenshot_key',
+    type: 'varchar',
+    length: 512,
+    nullable: true,
+  })
+  screenshotKey: string | null;
+
   @Column({ name: 'amount_paise', type: 'int' })
   amountPaise: number;
 

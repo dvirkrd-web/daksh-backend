@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 import { serializeOrder } from '../../common/serializers';
 import { Order } from '../../entities/order.entity';
 import { Payment } from '../../entities/payment.entity';
+import { UploadedFile } from '../../entities/uploaded-file.entity';
 import { CreateOrderDto } from '../orders/dto/order.dto';
 import { OrdersService } from '../orders/orders.service';
 import { UpiPaymentDto } from './dto/upi-payment.dto';
@@ -30,6 +31,8 @@ export class PaymentsService {
   constructor(
     @InjectRepository(Payment)
     private readonly payments: Repository<Payment>,
+    @InjectRepository(UploadedFile)
+    private readonly files: Repository<UploadedFile>,
     private readonly ordersService: OrdersService,
     private readonly razorpay: RazorpayService,
   ) {}
@@ -79,20 +82,40 @@ export class PaymentsService {
 
   /**
    * UPI (manual) payment — creates the order in pending_payment plus a
-   * payments row with method 'upi' and the customer's UTR.
+   * payments row with method 'upi' and the customer's payment proof:
+   * the 12-digit UTR (stored in gateway_payment_id) and/or the storage
+   * key of a payment screenshot the customer uploaded through the
+   * normal uploads flow (stored in screenshot_key). At least one proof
+   * is required.
    *
    * Deliberately NO Razorpay isConfigured() gate here: UPI is paid
    * directly to the business UPI ID and verified by an admin. The order
    * is NOT a real order yet — it becomes `received` only when an admin
-   * verifies the UTR (AdminService.verifyUpiPayment), and it is hidden
+   * verifies the proof (AdminService.verifyUpiPayment), and it is hidden
    * from the customer's order list until then (OrdersService.listForUser).
    */
   async createUpiOrder(userId: string, dto: UpiPaymentDto) {
-    if (!/^\d{12}$/.test(dto.utr)) {
+    const utr = dto.utr?.trim() ? dto.utr.trim() : null;
+    if (utr && !/^\d{12}$/.test(utr)) {
       throw new BadRequestException(
         'UTR must be the 12-digit UPI reference number from your payment receipt.',
       );
     }
+
+    let screenshotKey: string | null = null;
+    if (dto.screenshot_storage_key) {
+      screenshotKey = await this.resolveScreenshotKey(
+        userId,
+        dto.screenshot_storage_key,
+      );
+    }
+
+    if (!utr && !screenshotKey) {
+      throw new BadRequestException(
+        'Please provide either the 12-digit UTR from your payment receipt or a screenshot of your payment.',
+      );
+    }
+
     const order = await this.ordersService.createDraftOrder(userId, dto);
 
     await this.payments.save(
@@ -100,7 +123,8 @@ export class PaymentsService {
         orderId: order.id,
         gateway: 'upi',
         gatewayOrderId: `upi-${order.orderNo}`,
-        gatewayPaymentId: dto.utr,
+        gatewayPaymentId: utr,
+        screenshotKey,
         amountPaise: order.totalPaise,
         method: 'upi',
         status: 'created',
@@ -110,14 +134,39 @@ export class PaymentsService {
     );
 
     // Shape consumed by the app: the created order (still pending_payment)
-    // plus the UTR and amount for the confirmation screen.
+    // plus the submitted proof and amount for the confirmation screen.
     return {
       order: serializeOrder(order),
-      utr: dto.utr,
+      utr,
+      screenshot_key: screenshotKey,
       amount_paise: order.totalPaise,
       backend_order_id: order.id,
       backend_order_no: order.orderNo,
     };
+  }
+
+  /**
+   * A payment screenshot is accepted only if it is a CONFIRMED upload
+   * (POST /uploads/confirm created the row) that belongs to the caller —
+   * the same ownership rule the order flow applies to print files, so a
+   * customer can never attach someone else's screenshot as proof.
+   */
+  private async resolveScreenshotKey(
+    userId: string,
+    storageKey: string,
+  ): Promise<string> {
+    if (!storageKey.startsWith(`uploads/${userId}/`)) {
+      throw new BadRequestException(
+        'The payment screenshot does not belong to your account. Please upload it again.',
+      );
+    }
+    const file = await this.files.findOne({ where: { storageKey } });
+    if (!file || file.userId !== userId) {
+      throw new BadRequestException(
+        'The payment screenshot was not found. Please upload it again.',
+      );
+    }
+    return file.storageKey;
   }
 
   async verifyPayment(userId: string, dto: VerifyPaymentDto) {

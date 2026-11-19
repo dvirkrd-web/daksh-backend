@@ -167,17 +167,26 @@ export class AdminService {
       }
     }
 
-    const paymentRows = (order.payments ?? []).map((p) => ({
-      id: p.id,
-      gateway: p.gateway,
-      gateway_order_id: p.gatewayOrderId,
-      gateway_payment_id: p.gatewayPaymentId,
-      amount_paise: p.amountPaise,
-      method: p.method,
-      status: p.status,
-      signature_verified: p.signatureVerified,
-      created_at: p.createdAt ? p.createdAt.toISOString() : null,
-    }));
+    // UPI payments may carry a payment-screenshot proof: expose its key
+    // plus a time-limited signed URL, the same pattern as order files.
+    const paymentRows = await Promise.all(
+      (order.payments ?? []).map(async (p) => ({
+        id: p.id,
+        gateway: p.gateway,
+        gateway_order_id: p.gatewayOrderId,
+        gateway_payment_id: p.gatewayPaymentId,
+        screenshot_key: p.screenshotKey,
+        screenshot_url:
+          p.screenshotKey && storageReady
+            ? await this.storage.presignGet(p.screenshotKey)
+            : null,
+        amount_paise: p.amountPaise,
+        method: p.method,
+        status: p.status,
+        signature_verified: p.signatureVerified,
+        created_at: p.createdAt ? p.createdAt.toISOString() : null,
+      })),
+    );
 
     return {
       ...json,
@@ -268,9 +277,22 @@ export class AdminService {
   }
 
   /**
-   * Admin verified the UTR against the business UPI/bank account. The
-   * payment is marked captured and the order becomes a real order
-   * (`received`), exactly like a verified Razorpay payment.
+   * Human-readable label for the proof a UPI customer submitted — the
+   * UTR when they typed one, otherwise the payment screenshot. Used in
+   * history notes, audit details and customer notifications so a
+   * screenshot-only payment never reads as "UTR null".
+   */
+  private upiProofLabel(payment: Payment): string {
+    if (payment.gatewayPaymentId) return `UTR ${payment.gatewayPaymentId}`;
+    if (payment.screenshotKey) return 'payment screenshot';
+    return 'no proof recorded';
+  }
+
+  /**
+   * Admin verified the payment proof (UTR or screenshot) against the
+   * business UPI/bank account. The payment is marked captured and the
+   * order becomes a real order (`received`), exactly like a verified
+   * Razorpay payment.
    */
   async verifyUpiPayment(adminId: string, id: string, ip?: string) {
     const order = await this.ordersService.loadFullOrder(id);
@@ -283,24 +305,30 @@ export class AdminService {
       entity: 'order',
       entityId: order.id,
       ipAddress: ip ?? null,
-      details: { order_no: order.orderNo, utr: payment.gatewayPaymentId },
+      details: {
+        order_no: order.orderNo,
+        utr: payment.gatewayPaymentId,
+        proof: payment.gatewayPaymentId ? 'utr' : 'screenshot',
+      },
     });
     await this.ordersService.confirmOrderPaid(
       order.id,
       'system',
-      `UPI payment verified by admin (UTR: ${payment.gatewayPaymentId}).`,
+      `UPI payment verified by admin (${this.upiProofLabel(payment)}).`,
     );
     return this.getOrderDetail(order.id);
   }
 
   /**
-   * Admin could NOT find the UTR in the business account. The payment
-   * is marked failed and the order is cancelled — the customer is
-   * notified and can contact support if money was actually deducted.
+   * Admin could NOT match the payment proof (UTR or screenshot) in the
+   * business account. The payment is marked failed and the order is
+   * cancelled — the customer is notified and can contact support if
+   * money was actually deducted.
    */
   async rejectUpiPayment(adminId: string, id: string, ip?: string) {
     const order = await this.ordersService.loadFullOrder(id);
     const payment = await this.loadPendingUpiPayment(order);
+    const proofLabel = this.upiProofLabel(payment);
     payment.status = 'failed';
     await this.payments.save(payment);
     order.status = OrderStatus.Cancelled;
@@ -311,7 +339,7 @@ export class AdminService {
         status: OrderStatus.Cancelled,
         changedBy: 'admin',
         adminId,
-        note: `UPI payment rejected by admin — UTR ${payment.gatewayPaymentId} could not be verified in the business account.`,
+        note: `UPI payment rejected by admin — ${proofLabel} could not be verified in the business account.`,
       }),
     );
     await this.audit.record({
@@ -320,12 +348,16 @@ export class AdminService {
       entity: 'order',
       entityId: order.id,
       ipAddress: ip ?? null,
-      details: { order_no: order.orderNo, utr: payment.gatewayPaymentId },
+      details: {
+        order_no: order.orderNo,
+        utr: payment.gatewayPaymentId,
+        proof: payment.gatewayPaymentId ? 'utr' : 'screenshot',
+      },
     });
     await this.notifications.notify({
       userId: order.userId,
       title: 'Payment not verified',
-      body: `Your payment for order ${order.orderNo} could not be verified (UTR ${payment.gatewayPaymentId}). The order was cancelled — please contact support if the money was deducted from your account.`,
+      body: `Your payment for order ${order.orderNo} could not be verified (${proofLabel}). The order was cancelled — please contact support if the money was deducted from your account.`,
       type: 'payment',
       orderId: order.id,
     });
