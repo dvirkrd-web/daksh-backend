@@ -7,7 +7,7 @@ import { ProductPrice } from './entities/product-price.entity';
 /**
  * Seed data — run with `npm run seed` (after migrations).
  *
- * The 6 services and prices below are the owner's STARTING prices: they
+ * The 7 services and prices below are the owner's STARTING prices: they
  * match the approved Phase 1 design and the Flutter app's fallback
  * catalogue (PVC Photo ID Card ₹99 + ₹49 delivery, etc.). They are
  * editable defaults — change them any time from the Admin Dashboard
@@ -106,6 +106,23 @@ const CATALOGUE: SeedProduct[] = [
     prices: [
       { option_label: 'A4 Black & White (per page)', price_paise: 300, delivery_charge_paise: 9900, min_qty: 100 },
       { option_label: 'A4 Colour (per page)', price_paise: 800, delivery_charge_paise: 9900, min_qty: 100 },
+    ],
+  },
+  {
+    name: 'Sarkari Form Seva — Form Bharai + Print',
+    slug: 'sarkari-form-seva',
+    description:
+      'Government form filling + printing service. Upload the applicant\'s documents, we fill the government form online, print it and deliver it to your address. Your documents are used ONLY for your form work and are never shared for any other purpose. For some forms an OTP comes on the applicant\'s mobile — our team will call to take the OTP while filling the form. Sarkari (government) fees, if any, are charged separately at actuals.',
+    category: 'form_seva',
+    sort_order: 7,
+    prices: [
+      { option_label: 'Ration Card / Jan Aadhaar Form', price_paise: 9900, delivery_charge_paise: 4900, min_qty: 1 },
+      { option_label: 'Labour Card (BOCW) Form', price_paise: 9900, delivery_charge_paise: 4900, min_qty: 1 },
+      { option_label: 'Caste / Income / Domicile Certificate', price_paise: 9900, delivery_charge_paise: 4900, min_qty: 1 },
+      { option_label: 'Voter ID — New / Correction', price_paise: 9900, delivery_charge_paise: 4900, min_qty: 1 },
+      { option_label: 'Scholarship / Exam Form', price_paise: 9900, delivery_charge_paise: 4900, min_qty: 1 },
+      { option_label: 'PAN Card Apply', price_paise: 9900, delivery_charge_paise: 4900, min_qty: 1 },
+      { option_label: 'Any Other Sarkari Form', price_paise: 9900, delivery_charge_paise: 4900, min_qty: 1 },
     ],
   },
 ];
